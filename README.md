@@ -30,7 +30,7 @@ The installer checks Docker, generates a `.env` (from `.env.example`), configure
    curl -o .env https://raw.githubusercontent.com/vxcontrol/pentagi/master/.env.example
    cp .env .env.bak && vim .env
    ```  
-   At minimum set an LLM provider key (`OPEN_AI_KEY` or `ANTHROPIC_API_KEY`, etc.), and `PENTAGI_POSTGRES_USER/PASSWORD`. Configure any optional search or monitoring keys (Google API, Tavily, etc.)【9†L941-L950】. For secure setup, change salts (`COOKIE_SIGNING_SALT`), set `PUBLIC_URL`, and provide SSL certs via `SERVER_SSL_CRT/SERVER_SSL_KEY` if exposing public UI.  
+   At minimum set an LLM provider key (`OPEN_AI_KEY` or `ANTHROPIC_API_KEY`, etc.), and `PENTAGI_POSTGRES_USER/PASSWORD`. Configure any optional search or monitoring keys (Google API, Tavily, etc.). For secure setup, change salts (`COOKIE_SIGNING_SALT`), set `PUBLIC_URL`, and provide SSL certs via `SERVER_SSL_CRT/SERVER_SSL_KEY` if exposing public UI.  
 3. **Tool configurations**: Touch or create provider YAMLs if using Ollama or custom LLMs (examples in `examples/configs/`).  
 4. **Docker Compose**: Download or use `docker-compose.yml` from the repo:
    ```
@@ -64,7 +64,7 @@ and check errors (e.g. database errors).
 | **Customization**        | Limited to provided images; custom tools require custom images.        | Full control: can modify code or images (e.g. change default pentest image). |
 | **Performance**          | Stable/performance tuned images; easy scaling.                        | Might require manual tuning (e.g. ensure correct Go build).   |
 | **Updates**              | Pull latest image from Docker Hub; easy upgrades.                    | Must pull latest code and rebuild; more manual.               |
-| **Security**             | Runs as root by default for Docker socket access (less secure)【10†L43-L47】; easier sandbox. | Can run Docker in rootless mode or on a separate host for security. |
+| **Security**             | Runs as root by default for Docker socket access (less secure); easier sandbox. | Can run Docker in rootless mode or on a separate host for security. |
 | **Debugging**            | Easier isolation; logs via `docker logs`.                             | Debug with local logs, but tool binaries are accessible.      |
 
 ## 2. Attack Modules & Capabilities  
@@ -74,7 +74,7 @@ PentAGI orchestrates AI agents that use integrated open-source pentest tools. Al
 - **Reconnaissance (Information Gathering):**  
   - *Passive Recon:* PentAGI uses web intelligence (built-in headless browser) and external search APIs (Google, DuckDuckGo, Tavily, etc.)【6†L362-L370】. The agent prompts the browser to crawl target domains or use search engines to gather domain names, technologies, open source intelligence (OSINT), metadata, and employee info. Detection: very stealthy (like normal browsing). Limitations: relies on what’s public; requires queries via `.env` (enable `DUCKDUCKGO_ENABLED`, etc.)【9†L941-L950】.  
   - *Active Discovery:* DNS/subdomain enumeration using tools like `subfinder`, `amass` (implied via Kali integration). Input: target domain. Output: list of subdomains/IPs. Payloads: DNS queries, brute-forcing hostnames. Evasion: none needed (passive DNS is low-key). Limitations: misses non-public subdomains.  
-  - *Host/Port Scanning:* Uses **Nmap** (e.g. SYN scan `-sS`, UDP scan) to find live hosts and open ports【48†L872-L879】. Inputs: target IP/range. Payloads: standard Nmap probes. Detection: SYN scans can trigger IDS unless throttled. PentAGI may use timing adjustments (e.g. `-T3`). Limitations: slow on large ranges; might miss filtered ports.
+  - *Host/Port Scanning:* Uses **Nmap** (e.g. SYN scan `-sS`, UDP scan) to find live hosts and open ports. Inputs: target IP/range. Payloads: standard Nmap probes. Detection: SYN scans can trigger IDS unless throttled. PentAGI may use timing adjustments (e.g. `-T3`). Limitations: slow on large ranges; might miss filtered ports.
 
 - **Service Enumeration & Version Detection:**  
   After ports are found, PentAGI runs Nmap with service/OS detection (`-sV -O`), banner grabbing, and specialized tools (e.g. `snmpwalk`, `enum4linux`, `hydra` for SMB/SSH) as needed. Inputs: port numbers from scan. Payloads: protocol probes (SSH banner, SNMP OIDs). Evasion: VLAN sandboxing; can adjust scan speed. Limitation: blocked by firewalls/IDS if aggressive; reliance on tool DB for OS detection.
@@ -83,9 +83,9 @@ PentAGI orchestrates AI agents that use integrated open-source pentest tools. Al
   - *Common Vuln Scanning:* **Nikto** (web server scan) and **Nuclei** (template-based scanning) check for default scripts, outdated software, common vulnerabilities【48†L872-L879】. Input: target URL. Payloads: HTTP requests with known patterns. Detection: moderate (Nikto hits many URLs), but may be rate-limited.  
   - *Directory/Resource Bruteforce:* **Gobuster/Dirb** with wordlists to find hidden directories/files. Input: base URL and list. Payload: HTTP GET to guessed paths. Detection: can be noisy; use slow bruteforce or moderate concurrency.  
   - *Parameters Fuzzing:* Nuclei or custom payloads to test injection (SQL, XSS, LFI, SSRF). For example, injecting `' OR 1=1--` into query params and analyzing responses. Payloads: common SQL meta, `<script>` tags. Detection: some IDS may catch typical attack strings; could use URL encoding or obfuscation. Limitations: may produce many false positives (PentAGI uses agent parsing to filter).  
-  - *SQL Injection:* **Sqlmap** is specifically integrated for SQLi. When PentAGI suspects an injectable parameter (based on anomaly scanning or known patterns), it can invoke `sqlmap` automatically【48†L872-L879】. Inputs: vulnerable URL/param. Payloads: series of SQL injection payloads. Detection: high risk (noise) – agent might throttle or fallback to OOB testing (e.g. Burp Collaborator). Limitations: false flags if web app has filtering; requires response analysis.  
+  - *SQL Injection:* **Sqlmap** is specifically integrated for SQLi. When PentAGI suspects an injectable parameter (based on anomaly scanning or known patterns), it can invoke `sqlmap` automatically. Inputs: vulnerable URL/param. Payloads: series of SQL injection payloads. Detection: high risk (noise) – agent might throttle or fallback to OOB testing (e.g. Burp Collaborator). Limitations: false flags if web app has filtering; requires response analysis.  
   - *Cross-Site Scripting (XSS):* The system may attempt XSS by injecting script payloads (`<script>alert(1)</script>`). It can use its internal browser to test if scripts execute. Detection: XSS payloads are classic, but agent can use novel variations or blind tests. Limitations: modern CSPs may block; reading outcomes requires interactive checks.  
-  - *XML External Entities (XXE), CSRF, SSRF:* The AI might craft payloads for these if code patterns (XML parsers, URL fetchers) are found. For SSRF/XXE, PentAGI can use its own server as an OOB listener to catch callbacks (enabled by dedicated OOB port ranges【9†L891-L900】). These require the target server to trigger out-of-band DNS/HTTP to PentAGI.  
+  - *XML External Entities (XXE), CSRF, SSRF:* The AI might craft payloads for these if code patterns (XML parsers, URL fetchers) are found. For SSRF/XXE, PentAGI can use its own server as an OOB listener to catch callbacks (enabled by dedicated OOB port ranges). These require the target server to trigger out-of-band DNS/HTTP to PentAGI.  
   - *Authentication Brute Force:* Using **Hydra** or built-in tools for HTTP auth, FTP, SSH, SMTP, etc. Agent input includes login pages; it will load default or custom username/password lists. Payload: typical creds. Detection: login lockouts or rate limits; PentAGI must respect rate-limiting.  
   - *Social Engineering / Phishing:* PentAGI can simulate Slack/Gmail enumeration (implied by Slackhound-style integration, though not explicitly documented) and generate phishing emails for testing (the frontend has an Editor). Payload: crafted messages. Detection: high risk (should only do in controlled CTF/engagement with permission). Limitations: legal issues – see Ethical Considerations.  
 
@@ -190,7 +190,7 @@ flowchart TD
 7. **Follow-Up & Remediation Tracking:** Once submitted, track your report in H1 (ensure triage compliance). Maintain logs of tools used (PentAGI logs are timestamped and can serve as evidence of methodology). Collaborate via H1 comments as needed (PentAGI’s report can be used as initial content).
 
 ```
-gantt
+
 title Setup & Deployment Timeline
 dateFormat  YYYY-MM-DD
 section Preparation
@@ -210,9 +210,9 @@ Submit via API            :2026-02-26, 0.5d
 
 ## 4. Best Practices & Operational Security  
 
-- **Authorization & Ethics:** Only target systems explicitly in-scope (per HackerOne program policy). PentAGI’s EULA and site emphasize lawful use and permission【58†L58-L64】【54†L5-L8】. Document written authorization. Do *not* scan external networks indiscriminately (violates laws like CFAA). Use PentAGI only for agreed-upon assets.  
+- **Authorization & Ethics:** Only target systems explicitly in-scope (per HackerOne program policy). PentAGI’s EULA and site emphasize lawful use and permission. Document written authorization. Do *not* scan external networks indiscriminately (violates laws like CFAA). Use PentAGI only for agreed-upon assets.  
 - **Rate Limiting:** Respect target’s availability. Configure scan rates (PentAGI’s Nmap parameters or global settings like `WEBSCRAPER_REQUEST_LIMIT`) to avoid DoS. Use progressive scans (start slow, then deeper if safe).  
-- **Isolation:** Run PentAGI on a dedicated host or VM. The recommended two-node setup isolates “attacker” containers on a separate machine with limited network access【9†L892-L901】. Use firewall rules: PentAGI’s container might use Docker’s `NET_ADMIN`/`NET_RAW` caps (for scanning) but restrict outbound/inbound as needed.  
+- **Isolation:** Run PentAGI on a dedicated host or VM. The recommended two-node setup isolates “attacker” containers on a separate machine with limited network access. Use firewall rules: PentAGI’s container might use Docker’s `NET_ADMIN`/`NET_RAW` caps (for scanning) but restrict outbound/inbound as needed.  
 - **Credentials Management:** Store API keys (LLM, search, DB) securely (not in public repo). Use least-privilege for PostgreSQL and avoid exposing them.  
 - **Logging & Monitoring:** Enable PentAGI’s observability (Grafana, Jaeger, etc. stacks). Collect logs of all agent actions. These logs provide audit trails and help detect anomalies (e.g. unintended scans). Use the knowledge graph logs for retrospective analysis.  
 - **False Positives Handling:** AI may generate false alerts. Cross-verify critical findings manually or with multiple tools. Always include proof-of-concept evidence in reports. If a PentAGI finding seems dubious, try the corresponding tool directly (e.g., rerun Nmap or sqlmap manually).  
