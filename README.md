@@ -59,7 +59,7 @@ and check errors (e.g. database errors).
 
 | Aspect                   | Running via Docker (Compose)                                          | Running from Source                                           |
 |--------------------------|----------------------------------------------------------------------|----------------------------------------------------------------|
-| **Setup Speed**          | Very quick: pull/prebuilt images and run (`docker-compose up -d`)【27†L114-L123】.| Slower: requires cloning repo and building, plus dependencies. |
+| **Setup Speed**          | Very quick: pull/prebuilt images and run (`docker-compose up -d`).| Slower: requires cloning repo and building, plus dependencies. |
 | **Isolation**            | All components containerized (recommended for sandboxing)【6†L354-L362】. | Can run with containers too but more manual management.        |
 | **Customization**        | Limited to provided images; custom tools require custom images.        | Full control: can modify code or images (e.g. change default pentest image). |
 | **Performance**          | Stable/performance tuned images; easy scaling.                        | Might require manual tuning (e.g. ensure correct Go build).   |
